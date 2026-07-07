@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Henry Ochibots v19™ — Pair WhatsApp</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+  <style>
+    /* ✅ FIX: this page previously loaded no shared fonts (fell back to Segoe
+       UI / Courier New) and had no --accent/--bg/--card variables, so it
+       looked like a different site from index/admin/panel/register the
+       moment a visitor clicked through to /pair. Brought in line with the
+       same brand tokens used everywhere else. */
+    :root{
+      --accent:#00e5ff;
+      --accent2:#7c3aed;
+      --bg:#020408;
+      --card:#060e18;
+    }
+    *{margin:0;padding:0;box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{
+      background:var(--bg);
+      color:#e2eaf4;
+      font-family:'Space Grotesk','Segoe UI',system-ui,sans-serif;
+      min-height:100vh;
+      display:flex;
+      flex-direction:column;
+      overflow-x:hidden;
+    }
+    /* ── CUSTOM BG IMAGE (set via ?bg= URL param or JS) ── */
+    body.has-bg-img{
+      background-color:var(--bg);
+    }
+    .bg-image-layer{
+      position:fixed;inset:0;z-index:0;pointer-events:none;
+      background-size:cover;background-position:center;background-repeat:no-repeat;
+      opacity:0;
+      transition:opacity .6s ease;
+    }
+    .bg-image-layer.loaded{opacity:0.22;}  /* dim so text stays readable */
+    .bg-image-layer.loaded + .bg-glow{
+      background:
+        radial-gradient(ellipse 60% 50% at 50% 0%,rgba(124,58,237,0.35) 0%,transparent 70%),
+        radial-gradient(ellipse 40% 40% at 80% 80%,rgba(0,207,255,0.20) 0%,transparent 70%);
+    }
+
+    /* ── AMBIENT BACKGROUND ── */
+    .bg-glow{
+      position:fixed;inset:0;z-index:0;pointer-events:none;
+      background:
+        radial-gradient(ellipse 60% 50% at 50% 0%,rgba(124,58,237,0.18) 0%,transparent 70%),
+        radial-gradient(ellipse 40% 40% at 80% 80%,rgba(0,207,255,0.10) 0%,transparent 70%);
+    }
+    .grid-bg{
+      position:fixed;inset:0;z-index:0;pointer-events:none;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(255,255,255,0.025) 1px,transparent 1px);
+      background-size:48px 48px;
+      mask-image:radial-gradient(ellipse 80% 80% at 50% 40%,black 30%,transparent 100%);
+    }
+
+    /* ── NAV (shared across all pages) ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.1rem 2.5rem;
+      background: rgba(2,4,8,0.7); backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(0,229,255,0.08);
+    }
+    .nav-logo {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.95rem; font-weight: 700;
+      color: var(--accent); letter-spacing: 0.08em; text-decoration: none;
+      text-shadow: 0 0 20px rgba(0,229,255,0.5);
+    }
+    .nav-logo span { color: #e2eaf4; }
+    .nav-logo .v { color: #4a6070; }
+    .nav-links {
+      display: flex; align-items: center; gap: 1.8rem;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.75rem;
+      letter-spacing: 0.05em;
+    }
+    .nav-links a { color: #4a6070; text-decoration: none; transition: color 0.2s; }
+    .nav-links a:hover { color: var(--accent); }
+    .nav-links .nav-pair-btn {
+      color: #000; background: #00ff88; padding: 0.4rem 0.9rem;
+      border-radius: 6px; font-weight: 700; box-shadow: 0 0 14px rgba(0,255,136,0.25);
+    }
+    .nav-links .nav-pair-btn:hover { color: #000; box-shadow: 0 0 20px rgba(0,255,136,0.4); }
+    .nav-status {
+      display: flex; align-items: center; gap: 0.5rem; font-size: 0.72rem;
+      color: #00ff88; font-family: 'JetBrains Mono', monospace; letter-spacing: 0.08em;
+      text-shadow: 0 0 10px rgba(0,255,136,0.4);
+    }
+    .pulse { width: 8px; height: 8px; background: #00ff88; border-radius: 50%; box-shadow: 0 0 8px #00ff88; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.5; transform:scale(.8); } }
+    @media (max-width: 760px) { .nav-links { display: none; } .nav-hamburger { display: flex !important; } }
+    .nav-hamburger {
+      display: none; align-items: center; justify-content: center;
+      width: 36px; height: 36px; border-radius: 8px; cursor: pointer;
+      background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+      color: #ccc; font-size: 16px; margin-left: 10px;
+    }
+    .nav-hamburger:hover { background: rgba(255,255,255,.12); }
+    #mobileMenuOverlay {
+      position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.6);
+      backdrop-filter: blur(4px); display: none;
+    }
+    #mobileMenuOverlay.open { display: block; }
+    #mobileMenuPanel {
+      position: fixed; top: 0; right: 0; z-index: 201; width: 240px; height: 100vh;
+      background: #0d0e1a; border-left: 1px solid rgba(255,255,255,.08);
+      padding: 20px 16px; display: flex; flex-direction: column; gap: 8px;
+      transform: translateX(100%); transition: transform .25s ease;
+    }
+    #mobileMenuOverlay.open #mobileMenuPanel { transform: translateX(0); }
+    #mobileMenuPanel a {
+      display: block; padding: 12px; border-radius: 10px; color: #ccc;
+      text-decoration: none; font-size: 14px; background: rgba(255,255,255,.05);
+    }
+    #mobileMenuPanel a.nav-pair-btn { color: #00ff88; }
+
+    /* ── PAGE TOOLBAR (page-specific controls: live status + bg image) ── */
+    .page-toolbar{
+      position:relative;z-index:10;
+      display:flex;align-items:center;justify-content:flex-end;gap:8px;
+      padding:76px 20px 8px;
+    }
+    .topbar-status{
+      display:flex;align-items:center;gap:6px;margin-right:auto;
+      font-size:11px;color:#22c55e;
+      font-family:'JetBrains Mono',monospace;letter-spacing:.08em;
+    }
+    .pulse-dot{
+      width:7px;height:7px;border-radius:50%;
+      background:#22c55e;
+      box-shadow:0 0 8px #22c55e,0 0 16px rgba(34,197,94,0.4);
+      animation:pulse-anim 2s infinite;
+    }
+    @keyframes pulse-anim{
+      0%,100%{opacity:1;transform:scale(1)}
+      50%{opacity:.5;transform:scale(.8)}
+    }
+    @keyframes hueshift{to{filter:hue-rotate(360deg)}}
+
+    /* ── MAIN CONTENT ── */
+    .main{
+      flex:1;position:relative;z-index:1;
+      display:flex;flex-direction:column;align-items:center;
+      justify-content:center;padding:8px 16px 40px;
+    }
+
+    /* ── LOGO RING ── */
+    .logo-wrap{position:relative;margin-bottom:24px}
+    .logo-ring{
+      width:108px;height:108px;border-radius:50%;
+      background:conic-gradient(from 0deg,var(--accent2),var(--accent),var(--accent2));
+      display:flex;align-items:center;justify-content:center;
+      animation:hueshift 8s linear infinite;
+      box-shadow:0 0 40px rgba(124,58,237,0.35);
+    }
+    .logo-inner{
+      width:90px;height:90px;border-radius:50%;
+      background:var(--bg);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    }
+    .logo-inner .big{
+      font-size:13px;font-weight:900;letter-spacing:3px;
+      background:linear-gradient(135deg,var(--accent2),var(--accent));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+    }
+    .logo-inner .small{font-size:8px;color:#444;letter-spacing:4px}
+    .logo-badge{
+      position:absolute;bottom:4px;right:4px;
+      background:var(--bg);border-radius:50%;
+      width:26px;height:26px;
+      display:flex;align-items:center;justify-content:center;
+      font-size:15px;
+      box-shadow:0 0 12px rgba(124,58,237,0.4);
+    }
+
+    /* ── HEADING ── */
+    .heading{
+      font-size:28px;font-weight:800;text-align:center;
+      background:linear-gradient(135deg,var(--accent2),var(--accent2));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+      margin-bottom:6px;
+      letter-spacing:-.3px;
+    }
+    .subtext{color:#555;font-size:14px;text-align:center;margin-bottom:28px;line-height:1.5}
+
+    /* ── CARD ── */
+    .card{
+      background:rgba(255,255,255,.035);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:20px;
+      padding:28px 22px;
+      width:100%;max-width:380px;
+      display:flex;flex-direction:column;align-items:center;
+      box-shadow:0 8px 40px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,.03);
+      position:relative;overflow:hidden;
+    }
+    .card::before{
+      content:'';position:absolute;inset:0;
+      background:linear-gradient(135deg,rgba(124,58,237,.04) 0%,transparent 50%,rgba(0,207,255,.03) 100%);
+      pointer-events:none;
+    }
+
+    /* ── TAB SWITCHER ── */
+    .tabs{
+      display:flex;gap:4px;width:100%;
+      background:rgba(255,255,255,.04);
+      border-radius:10px;padding:4px;
+      margin-bottom:20px;
+    }
+    .tab-btn{
+      flex:1;padding:8px 6px;border-radius:8px;border:none;cursor:pointer;
+      background:transparent;color:#666;font-size:12px;font-weight:600;
+      transition:all .2s;letter-spacing:.3px;
+    }
+    .tab-btn.active{
+      background:rgba(168,85,247,.2);
+      color:var(--accent2);
+      box-shadow:0 0 12px rgba(168,85,247,.15);
+    }
+    .tab-btn:hover:not(.active){color:#999}
+
+    /* ── INPUT STATE ── */
+    .state{width:100%}
+    .phone-input{
+      width:100%;padding:14px 16px;
+      background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.1);
+      border-radius:12px;color:#fff;font-size:15px;outline:none;
+      transition:border .2s,box-shadow .2s;
+      margin-bottom:18px;
+    }
+    .phone-input::placeholder{color:#3a3a4a}
+    .phone-input:focus{
+      border-color:var(--accent2);
+      box-shadow:0 0 0 3px rgba(167,139,250,.12);
+    }
+    .phone-input.error{border-color:#ef4444!important;box-shadow:0 0 0 3px rgba(239,68,68,.12)!important}
+
+    /* ── QR SECTION ── */
+    .qr-wrap{
+      width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;
+    }
+    .qr-placeholder{
+      width:200px;height:200px;border-radius:12px;
+      background:rgba(255,255,255,.05);
+      border:1px dashed rgba(255,255,255,.1);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+      color:#555;font-size:13px;text-align:center;
+      padding:16px;
+    }
+    .qr-placeholder .qr-icon{font-size:36px}
+    .qr-note{font-size:12px;color:#555;text-align:center;line-height:1.5;max-width:260px}
+
+    /* ── BTN ── */
+    .btn-generate{
+      width:100%;padding:14px;border-radius:12px;border:none;cursor:pointer;
+      background:linear-gradient(135deg,#7c3aed,var(--accent2));
+      color:#fff;font-size:15px;font-weight:700;letter-spacing:.5px;
+      transition:opacity .2s,transform .1s,box-shadow .2s;
+      box-shadow:0 4px 24px rgba(124,58,237,.35);
+    }
+    .btn-generate:hover{opacity:.9;box-shadow:0 6px 32px rgba(124,58,237,.5)}
+    .btn-generate:active{transform:scale(.98)}
+    .btn-generate:disabled{opacity:.5;cursor:not-allowed}
+    /* ✅ FIX: the QR "Load QR Code" button reused the full-width
+       .btn-generate style, so under the 200px QR box it looked oversized
+       next to the phone-input button. Smaller, centered, auto-width. */
+    .btn-qr{
+      width:auto;padding:10px 22px;border-radius:10px;border:none;cursor:pointer;
+      background:linear-gradient(135deg,#7c3aed,var(--accent2));
+      color:#fff;font-size:13px;font-weight:700;letter-spacing:.3px;
+      transition:opacity .2s,transform .1s,box-shadow .2s;
+      box-shadow:0 4px 20px rgba(124,58,237,.3);
+    }
+    .btn-qr:hover{opacity:.9;box-shadow:0 6px 26px rgba(124,58,237,.45)}
+    .btn-qr:active{transform:scale(.98)}
+    .btn-qr:disabled{opacity:.5;cursor:not-allowed}
+
+    /* ── LOADING ── */
+    .loading-state{display:none;flex-direction:column;align-items:center;gap:14px;width:100%}
+    .spinner{
+      width:42px;height:42px;border-radius:50%;
+      border:3px solid rgba(255,255,255,.08);
+      border-top-color:var(--accent2);
+      animation:spin .8s linear infinite;
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .loading-text{color:#888;font-size:14px;text-align:center;line-height:1.7}
+    .progress-wrap{width:100%;height:4px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden}
+    .progress-bar{
+      height:100%;
+      background:linear-gradient(90deg,#7c3aed,var(--accent));
+      border-radius:4px;
+      width:5%;
+      transition:width .3s ease;
+    }
+
+    /* ── CODE STATE ── */
+    .code-state{display:none;flex-direction:column;align-items:center;gap:16px;width:100%}
+    .check-icon{
+      width:52px;height:52px;border-radius:50%;
+      background:rgba(34,197,94,.1);border:2px solid #22c55e;
+      display:flex;align-items:center;justify-content:center;font-size:24px;
+      animation:pop .3s ease;
+    }
+    @keyframes pop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+    .code-label{color:#555;font-size:11px;letter-spacing:2px;text-transform:uppercase}
+    .code-box{
+      background:rgba(0,207,255,.05);
+      border:1px solid rgba(0,207,255,.2);
+      border-radius:14px;padding:20px 24px;
+      width:100%;text-align:center;cursor:pointer;
+      transition:background .2s,border-color .2s;
+    }
+    .code-box:hover{background:rgba(0,207,255,.1);border-color:rgba(0,207,255,.35)}
+    .code-text{
+      font-size:34px;font-weight:900;letter-spacing:8px;
+      color:var(--accent);font-family:'JetBrains Mono',monospace;
+      user-select:all;word-break:break-all;
+    }
+    .code-hint{color:#444;font-size:11px;margin-top:6px}
+    .code-timer{
+      font-size:12px;color:#f59e0b;
+      display:flex;align-items:center;gap:6px;
+    }
+    .timer-dot{width:6px;height:6px;border-radius:50%;background:#f59e0b;animation:pulse-anim 1s infinite}
+
+    .code-actions{display:flex;gap:10px;width:100%}
+    .btn-copy{
+      flex:1;padding:13px;border-radius:12px;border:none;cursor:pointer;
+      background:linear-gradient(135deg,#7c3aed,var(--accent2));
+      color:#fff;font-size:14px;font-weight:700;
+      display:flex;align-items:center;justify-content:center;gap:7px;
+      transition:opacity .2s,transform .1s;
+    }
+    .btn-copy:hover{opacity:.85}
+    .btn-copy:active{transform:scale(.97)}
+    .btn-copy.copied{background:linear-gradient(135deg,#059669,#10b981)!important}
+    .btn-new{
+      flex:1;padding:13px;border-radius:12px;cursor:pointer;
+      background:transparent;border:1px solid rgba(255,255,255,.12);
+      color:#888;font-size:14px;font-weight:600;
+      display:flex;align-items:center;justify-content:center;gap:7px;
+      transition:all .2s;
+    }
+    .btn-new:hover{border-color:var(--accent2);color:var(--accent2)}
+
+    /* ── ERROR STATE ── */
+    .error-state{display:none;flex-direction:column;align-items:center;gap:14px;width:100%}
+    .error-icon{font-size:36px}
+    .error-msg{color:#f87171;text-align:center;font-size:14px;line-height:1.6;white-space:pre-line}
+    .btn-retry{
+      padding:12px 28px;border-radius:12px;
+      border:1px solid rgba(239,68,68,.4);
+      background:rgba(239,68,68,.08);
+      color:#f87171;font-size:14px;font-weight:600;cursor:pointer;
+      transition:background .2s;
+    }
+    .btn-retry:hover{background:rgba(239,68,68,.18)}
+
+    /* ── STEPS ── */
+    .steps{
+      width:100%;max-width:380px;
+      margin-top:16px;
+      background:rgba(255,255,255,.025);
+      border:1px solid rgba(255,255,255,.06);
+      border-radius:14px;padding:16px;
+      display:none;
+    }
+    .steps.visible{display:block}
+    .steps-title{font-size:11px;color:#444;letter-spacing:1.5px;margin-bottom:12px;text-transform:uppercase}
+    .step-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;font-size:13px;color:#666;line-height:1.5}
+    .step-row:last-child{margin-bottom:0}
+    .step-num{
+      min-width:20px;height:20px;border-radius:50%;
+      background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.3);
+      display:flex;align-items:center;justify-content:center;
+      font-size:10px;font-weight:700;color:var(--accent2);
+      flex-shrink:0;margin-top:2px;
+    }
+
+    /* ── BADGES ── */
+    .badges{
+      display:flex;gap:10px;width:100%;max-width:380px;margin-top:18px;
+    }
+    .badge{
+      flex:1;background:rgba(255,255,255,.03);
+      border:1px solid rgba(255,255,255,.07);
+      border-radius:14px;padding:14px 8px;
+      display:flex;flex-direction:column;align-items:center;gap:6px;
+    }
+    .badge-icon{font-size:22px}
+    .badge-label{font-size:11px;color:#444;letter-spacing:.5px}
+
+    /* ── TOAST ── */
+    .toast{
+      position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);
+      background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);
+      color:#4ade80;border-radius:12px;padding:12px 20px;
+      font-size:14px;font-weight:600;
+      transition:transform .3s cubic-bezier(.34,1.56,.64,1),opacity .3s;
+      opacity:0;z-index:1000;white-space:nowrap;
+      backdrop-filter:blur(8px);
+      pointer-events:none;
+    }
+    .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+    .toast.error-toast{
+      background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.3);color:#f87171;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media(max-width:420px){
+      .code-text{font-size:28px;letter-spacing:5px}
+      .heading{font-size:24px}
+    }
+  </style>
+</head>
+<body>
+<div class="bg-image-layer" id="bgImageLayer"></div>
+<div class="bg-glow"></div>
+<div class="grid-bg"></div>
+
+<!-- NAV (shared across all pages) -->
+<nav>
+  <a href="/" class="nav-logo">HENRY <span>OCHIBOTS</span> <span class="v">V19™</span></a>
+  <div class="nav-links">
+    <a href="/#commands">Commands</a>
+    <a href="/#how-it-works">How It Works</a>
+    <a href="/#deploy">Deploy</a>
+    <a href="/register" class="nav-pair-btn" style="background:linear-gradient(90deg,#22d3ee,#a78bfa)">🪪 Register</a>
+    <a href="/admin">Admin</a>
+  </div>
+  <button class="nav-hamburger" onclick="toggleMobileMenu()" aria-label="Menu">☰</button>
+</nav>
+
+<div id="mobileMenuOverlay" onclick="if(event.target===this) closeMobileMenu()">
+  <div id="mobileMenuPanel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span style="color:#a78bfa;font-weight:700;font-size:15px">Menu</span>
+      <button onclick="closeMobileMenu()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer">✕</button>
+    </div>
+    <a href="/#commands" onclick="closeMobileMenu()">📋 Commands</a>
+    <a href="/#how-it-works" onclick="closeMobileMenu()">⚙️ How It Works</a>
+    <a href="/#deploy" onclick="closeMobileMenu()">🚀 Deploy</a>
+    <a href="/register" onclick="closeMobileMenu()">🪪 Register</a>
+    <a href="/panel" onclick="closeMobileMenu()">🔓 Bot Panel Login</a>
+    <a href="/admin" onclick="closeMobileMenu()">🛡️ Admin Panel</a>
+    <a href="/status" target="_blank" onclick="closeMobileMenu()">📊 Bot Status</a>
+  </div>
+</div>
+<script>
+  function toggleMobileMenu() { document.getElementById('mobileMenuOverlay').classList.add('open'); }
+  function closeMobileMenu() { document.getElementById('mobileMenuOverlay').classList.remove('open'); }
+</script>
+
+<!-- PAGE TOOLBAR (page-specific: live pairing status + background image controls) -->
+<div class="page-toolbar">
+  <div class="topbar-status" id="botStatus">
+    <div class="pulse-dot"></div>
+    <span>ONLINE</span>
+  </div>
+  <input type="file" id="bgFileInput" accept="image/*" style="display:none"/>
+  <button onclick="document.getElementById('bgFileInput').click()" title="Set background image"
+    style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:var(--accent2);
+           width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:14px;
+           display:flex;align-items:center;justify-content:center;">🖼️</button>
+  <button onclick="removeBgImage()" title="Remove background"
+    style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#666;
+           width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:12px;
+           display:flex;align-items:center;justify-content:center;">✕</button>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <!-- LOGO -->
+  <div class="logo-wrap">
+    <div class="logo-ring">
+      <div class="logo-inner">
+        <span class="big">BEAST</span>
+        <span class="small">BOT</span>
+      </div>
+    </div>
+    <div class="logo-badge">🔗</div>
+  </div>
+
+  <div class="heading">Link Your WhatsApp</div>
+  <div class="subtext">Get a code or scan a QR — link in under 60 seconds</div>
+
+  <!-- CARD -->
+  <div class="card">
+
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab-btn active" id="tabCode" onclick="switchTab('code')">🔑 Pair Code</button>
+      <button class="tab-btn" id="tabQr" onclick="switchTab('qr')">📷 QR Code</button>
+    </div>
+
+    <!-- PAIR CODE PANEL -->
+    <div id="panelCode" style="width:100%">
+      <!-- INPUT STATE -->
+      <div class="state" id="inputState">
+        <input class="phone-input" id="phoneInput" type="tel"
+          placeholder="e.g. 254712345678 (no + sign)"
+          maxlength="15"
+          onkeydown="if(event.key==='Enter')generate()"
+          oninput="clearInputError()"/>
+        <button class="btn-generate" id="genBtn" onclick="generate()">🔑 Generate Pairing Code</button>
+      </div>
+
+      <!-- LOADING STATE -->
+      <div class="loading-state" id="loadingState">
+        <div class="spinner"></div>
+        <div class="loading-text">Linking to WhatsApp…<br/><small style="color:#444">Usually takes 5–15 seconds</small></div>
+        <div class="progress-wrap"><div class="progress-bar" id="progBar"></div></div>
+      </div>
+
+      <!-- CODE STATE -->
+      <div class="code-state" id="codeState">
+        <div class="check-icon">✅</div>
+        <div class="code-label">Your Pairing Code</div>
+        <div class="code-box" onclick="copyCode()" title="Tap to copy">
+          <div class="code-text" id="codeText">--------</div>
+          <div class="code-hint">Tap anywhere here to copy</div>
+        </div>
+        <div class="code-timer" id="codeTimer">
+          <div class="timer-dot"></div>
+          <span id="timerDisplay">Valid for 60s</span>
+        </div>
+        <div class="code-actions">
+          <button class="btn-copy" id="copyBtn" onclick="copyCode()">📋 Copy Code</button>
+          <button class="btn-new" onclick="resetAll()">🔄 New Code</button>
+        </div>
+        <div style="margin-top:16px;padding:12px;border-radius:10px;background:rgba(255,255,255,.05);font-size:13px;line-height:1.5;color:#aaa">
+          🔒 After entering this code, your bot will be <strong>locked</strong> until activated.
+          In your WhatsApp chat with the bot, send <code>.pair key</code> to request access,
+          then <code>.key XXXXXX</code> once the admin sends you a key.
+        </div>
+
+        <a href="/assets/BeastBot-User-Guide.pdf" download
+           style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;
+                  padding:12px;border-radius:10px;text-decoration:none;font-size:13px;font-weight:600;
+                  color:#22d3ee;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.25);">
+          📄 Download the User Guide (PDF)</a>
+
+        <a href="/assets/BeastBot-Whats-Fixed.pdf" download
+           style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px;
+                  padding:12px;border-radius:10px;text-decoration:none;font-size:13px;font-weight:600;
+                  color:#a78bfa;background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.25);">
+          🛠️ Download What Was Fixed (PDF)</a>
+        </div>
+      </div>
+
+      <!-- ERROR STATE -->
+      <div class="error-state" id="errorState">
+        <div class="error-icon">⚠️</div>
+        <div class="error-msg" id="errorMsg">Something went wrong. Please try again.</div>
+        <button class="btn-retry" onclick="resetAll()">Try Again</button>
+      </div>
+    </div>
+
+    <!-- QR CODE PANEL -->
+    <div id="panelQr" style="width:100%;display:none">
+      <div class="qr-wrap">
+        <div id="qrContainer" class="qr-placeholder">
+          <div class="qr-icon">📷</div>
+          <div id="qrMsg" style="color:#666;font-size:13px">Click "Load QR Code" to generate</div>
+        </div>
+        <div class="qr-note">
+          Scan the QR code with WhatsApp → <strong style="color:var(--accent2)">Linked Devices</strong> → Link a Device
+        </div>
+        <button class="btn-qr" id="qrBtn" onclick="loadQR()" style="margin-top:4px">
+          📷 Load QR Code
+        </button>
+      </div>
+    </div>
+
+  </div><!-- /card -->
+
+  <!-- HOW-TO STEPS (shown after code is generated) -->
+  <div class="steps" id="steps">
+    <div class="steps-title">How to link</div>
+    <div class="step-row"><div class="step-num">1</div><span>Copy the 8-character code above</span></div>
+    <div class="step-row"><div class="step-num">2</div><span>Open WhatsApp → ⋮ Menu → <strong style="color:#ccc">Linked Devices</strong></span></div>
+    <div class="step-row"><div class="step-num">3</div><span>Tap <strong style="color:#ccc">Link a Device</strong>, then <strong style="color:#ccc">Link with phone number instead</strong></span></div>
+    <div class="step-row"><div class="step-num">4</div><span>Enter the code — your bot goes live 🚀</span></div>
+  </div>
+
+  <!-- TRUST BADGES -->
+  <div class="badges">
+    <div class="badge"><div class="badge-icon">🔒</div><div class="badge-label">Encrypted</div></div>
+    <div class="badge"><div class="badge-icon">⚡</div><div class="badge-label">Instant</div></div>
+    <!-- ✅ FIX: "No QR Scan" read like an error/status message. It was
+         actually describing the pair-code method as a scan-free option —
+         relabeled so it can't be misread as "the QR is broken". -->
+    <div class="badge"><div class="badge-icon">📱</div><div class="badge-label">Code or QR</div></div>
+  </div>
+</div><!-- /main -->
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+  /* ─────────────────────────────────── STATE ── */
+  let currentCode = null;
+  let pollTimer   = null;
+  let pollTimeout = null;
+  let countdownTimer = null;
+  let currentTab  = 'code';
+
+  /* ─────────────────────────────────── UTILS ── */
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  function showToast(msg, isError) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast' + (isError ? ' error-toast' : '');
+    // force reflow
+    t.offsetHeight;
+    t.classList.add('show');
+    clearTimeout(window._toastTimer);
+    window._toastTimer = setTimeout(() => { t.classList.remove('show'); }, 2600);
+  }
+
+  /* ─────────────────────────────────── TABS ── */
+  function switchTab(tab) {
+    currentTab = tab;
+    document.getElementById('tabCode').classList.toggle('active', tab === 'code');
+    document.getElementById('tabQr').classList.toggle('active', tab === 'qr');
+    document.getElementById('panelCode').style.display = tab === 'code' ? 'block' : 'none';
+    document.getElementById('panelQr').style.display  = tab === 'qr'   ? 'block' : 'none';
+  }
+
+  /* ─────────────────────────────────── SHOW STATES ── */
+  function showOnly(id) {
+    ['inputState','loadingState','codeState','errorState'].forEach(s => {
+      const el = document.getElementById(s);
+      el.style.display = s === id ? 'flex' : 'none';
+    });
+  }
+
+  /* ─────────────────────────────────── RESET ── */
+  function resetAll() {
+    clearInterval(pollTimer);
+    clearTimeout(pollTimeout);
+    clearInterval(countdownTimer);
+    currentCode = null;
+    document.getElementById('phoneInput').value = '';
+    document.getElementById('steps').classList.remove('visible');
+    showOnly('inputState');
+  }
+
+  /* ─────────────────────────────────── INPUT ERROR ── */
+  function clearInputError() {
+    const inp = document.getElementById('phoneInput');
+    inp.classList.remove('error');
+    inp.placeholder = 'e.g. 254712345678 (no + sign)';
+  }
+
+  function flashError(msg) {
+    const inp = document.getElementById('phoneInput');
+    inp.classList.add('error');
+    inp.placeholder = msg;
+    inp.value = '';
+    setTimeout(clearInputError, 3000);
+  }
+
+  /* ─────────────────────────────────── PROGRESS ── */
+  let progInterval = null;
+  function startProgress() {
+    const bar = document.getElementById('progBar');
+    let pct = 5;
+    bar.style.width = pct + '%';
+    clearInterval(progInterval);
+    progInterval = setInterval(() => {
+      // ease toward 88%
+      pct += (88 - pct) * 0.04;
+      bar.style.width = Math.min(pct, 88) + '%';
+    }, 300);
+  }
+  function finishProgress() {
+    clearInterval(progInterval);
+    const bar = document.getElementById('progBar');
+    bar.style.width = '100%';
+  }
+
+  /* ─────────────────────────────────── GENERATE ── */
+  async function generate() {
+    const raw = document.getElementById('phoneInput').value.replace(/[\s\-\+\(\)]/g,'');
+    if (!raw || raw.length < 7) {
+      flashError('Enter a valid number with country code');
+      return;
+    }
+    if (!/^\d+$/.test(raw)) {
+      flashError('Numbers only — no + or spaces');
+      return;
+    }
+
+    const btn = document.getElementById('genBtn');
+    btn.disabled = true;
+    showOnly('loadingState');
+    startProgress();
+
+    try {
+      // 1. Reset any existing session slot
+      await fetch('/pair-reset', { method: 'POST' }).catch(() => {});
+      await sleep(600);
+
+      // 2. Submit number
+      const body = new URLSearchParams({ number: raw });
+      const res  = await fetch('/pair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString()
+      });
+
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(txt.includes('starting') ? 'Bot is warming up.\nPlease wait 10s and try again.' : 'Server error. Try again.');
+      }
+
+      startPolling();
+    } catch (err) {
+      finishProgress();
+      btn.disabled = false;
+      showError(err.message || 'Connection failed. Check your internet.');
+    }
+  }
+
+  /* ─────────────────────────────────── POLLING ── */
+  function startPolling() {
+    let ticks = 0;
+    pollTimer = setInterval(async () => {
+      ticks++;
+      try {
+        const res  = await fetch('/pair-status');
+        const data = await res.json();
+        if (data.code && data.code !== currentCode) {
+          clearInterval(pollTimer);
+          clearTimeout(pollTimeout);
+          currentCode = data.code;
+          finishProgress();
+          showCode(data.code);
+          return;
+        }
+      } catch(_) {}
+      if (ticks >= 65) {
+        clearInterval(pollTimer);
+        if (!currentCode) showError('Timed out — WhatsApp did not return a code.\nPlease try again.');
+      }
+    }, 1000);
+
+    pollTimeout = setTimeout(() => {
+      clearInterval(pollTimer);
+      if (!currentCode) showError('Timed out. Please try again.');
+    }, 70000);
+  }
+
+  /* ─────────────────────────────────── SHOW CODE ── */
+  function showCode(code) {
+    document.getElementById('codeText').textContent = code;
+    const btn = document.getElementById('copyBtn');
+    btn.className = 'btn-copy';
+    btn.innerHTML = '📋 Copy Code';
+    document.getElementById('genBtn').disabled = false;
+    document.getElementById('steps').classList.add('visible');
+    showOnly('codeState');
+    startCodeCountdown(60);
+  }
+
+  /* ── countdown ── */
+  function startCodeCountdown(sec) {
+    clearInterval(countdownTimer);
+    let remaining = sec;
+    const disp = document.getElementById('timerDisplay');
+    function update() {
+      if (remaining <= 0) {
+        clearInterval(countdownTimer);
+        disp.textContent = 'Code expired — generate a new one';
+        return;
+      }
+      disp.textContent = `Valid for ${remaining}s`;
+      remaining--;
+    }
+    update();
+    countdownTimer = setInterval(update, 1000);
+  }
+
+  /* ─────────────────────────────────── COPY ── */
+  async function copyCode() {
+    const code = currentCode || document.getElementById('codeText').textContent.trim();
+    if (!code || code === '--------') return;
+
+    let ok = false;
+
+    // Method 1 — Clipboard API (requires HTTPS / secure context)
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(code);
+        ok = true;
+      } catch(_) {}
+    }
+
+    // Method 2 — execCommand with input (mobile-safe)
+    if (!ok) {
+      try {
+        const el = document.createElement('input');
+        el.setAttribute('readonly', '');
+        el.value = code;
+        // Must be visible enough to be focused; tiny but non-zero
+        el.style.cssText = 'position:fixed;top:50%;left:50%;width:1px;height:1px;opacity:0.01;font-size:16px;border:none;outline:none';
+        document.body.appendChild(el);
+        el.focus();
+        el.select();
+        el.setSelectionRange(0, 99999);
+        ok = document.execCommand('copy');
+        document.body.removeChild(el);
+      } catch(_) {}
+    }
+
+    // Method 3 — textarea fallback
+    if (!ok) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = code;
+        ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch(_) {}
+    }
+
+    if (ok) {
+      const btn = document.getElementById('copyBtn');
+      btn.className = 'btn-copy copied';
+      btn.innerHTML = '✅ Copied!';
+      showToast('✅ Code copied to clipboard!');
+      setTimeout(() => {
+        btn.className = 'btn-copy';
+        btn.innerHTML = '📋 Copy Code';
+      }, 2500);
+    } else {
+      // Last resort — prompt dialog always works
+      window.prompt('Long-press and copy:', code);
+    }
+  }
+
+  /* ─────────────────────────────────── ERROR ── */
+  function showError(msg) {
+    document.getElementById('genBtn').disabled = false;
+    document.getElementById('errorMsg').textContent = msg;
+    showOnly('errorState');
+  }
+
+  /* ─────────────────────────────────── STATUS CHECK ── */
+  async function checkBotStatus() {
+    try {
+      const res  = await fetch('/pair-status');
+      const data = await res.json();
+      const dot  = document.getElementById('botStatus');
+      if (data.online !== false) {
+        dot.innerHTML = '<div class="pulse-dot"></div><span>ONLINE</span>';
+        dot.style.color = '#22c55e';
+      } else {
+        dot.innerHTML = '<div class="pulse-dot" style="background:#f59e0b;box-shadow:0 0 8px #f59e0b"></div><span style="color:#f59e0b">STARTING</span>';
+        dot.style.color = '#f59e0b';
+      }
+    } catch(_) {}
+  }
+
+  /* ─────────────────────────────────── ABANDON ── */
+  window.addEventListener('beforeunload', () => {
+    if (!currentCode) {
+      navigator.sendBeacon('/pair-abandon', '{}');
+    }
+  });
+
+  /* ─────────────────────────────────── QR CODE ── */
+  let qrPollTimer = null;
+  async function loadQR() {
+    const btn = document.getElementById('qrBtn');
+    const container = document.getElementById('qrContainer');
+    const msg = document.getElementById('qrMsg');
+    btn.disabled = true;
+    btn.textContent = '⏳ Requesting QR...';
+    // ✅ FIX: call /qr-reset which starts a QR-mode session (not pairing code)
+    await fetch('/qr-reset', { method: 'POST' }).catch(() => {});
+    await sleep(600);
+    msg.textContent = 'Waiting for QR code...';
+    // Poll for the QR data URL
+    let ticks = 0;
+    clearInterval(qrPollTimer);
+    // Show animated dots while waiting
+    const dots = ['⏳ Generating QR.', '⏳ Generating QR..', '⏳ Generating QR...'];
+    qrPollTimer = setInterval(async () => {
+      ticks++;
+      // Animate waiting message
+      if (!document.querySelector('#qrContainer img')) {
+        msg.textContent = dots[ticks % 3];
+      }
+      try {
+        const res = await fetch('/pair-status');
+        const data = await res.json();
+        if (data.qr) {
+          clearInterval(qrPollTimer);
+          // Show the QR image — make it bigger for easy scanning
+          container.innerHTML = `<img src="${data.qr}" style="width:220px;height:220px;border-radius:12px;background:#fff;padding:8px;" alt="QR Code"/>`;
+          btn.textContent = '🔄 Refresh QR';
+          btn.disabled = false;
+          showToast('✅ Scan QR with WhatsApp now!');
+          return;
+        }
+        // Show helpful pending status
+        if (data.pending) {
+          msg.textContent = dots[ticks % 3];
+        }
+      } catch(_) {}
+      if (ticks >= 90) {  // 90s timeout (up from 60s)
+        clearInterval(qrPollTimer);
+        msg.textContent = '❌ QR timed out. Click Refresh QR to try again.';
+        btn.textContent = '📷 Load QR Code';
+        btn.disabled = false;
+      }
+    }, 1000);
+  }
+
+  /* ─────────────────────── BACKGROUND IMAGE ── */
+  const BG_KEY = 'beast_bot_bg_image';
+
+  function applyBgImage(dataUrl) {
+    const layer = document.getElementById('bgImageLayer');
+    if (!dataUrl) { layer.classList.remove('loaded'); layer.style.backgroundImage=''; return; }
+    layer.style.backgroundImage = `url(${dataUrl})`;
+    // Wait for image to actually load
+    const img = new Image();
+    img.onload = () => { layer.classList.add('loaded'); document.body.classList.add('has-bg-img'); };
+    img.src = dataUrl;
+    localStorage.setItem(BG_KEY, dataUrl);
+  }
+
+  function removeBgImage() {
+    localStorage.removeItem(BG_KEY);
+    applyBgImage(null);
+    document.body.classList.remove('has-bg-img');
+    showToast('🗑️ Background removed');
+  }
+
+  // Load saved bg on startup
+  const savedBg = localStorage.getItem(BG_KEY);
+  if (savedBg) applyBgImage(savedBg);
+
+  // Attach the hidden file input handler
+  document.getElementById('bgFileInput').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { showToast('❌ Please pick an image file'); return; }
+    const reader = new FileReader();
+    reader.onload = ev => { applyBgImage(ev.target.result); showToast('✅ Background updated!'); };
+    reader.readAsDataURL(file);
+    this.value = ''; // reset so same file can be re-picked
+  });
+
+  /* ─────────────────────────────────── INIT ── */
+  // On page load: if a previous session was pending but never paired, abandon it
+  // so the slot is freed and the next visitor starts fresh
+  (async function init() {
+    try {
+      const res = await fetch('/pair-status');
+      const data = await res.json();
+      // If there's a pending session (no code yet, not online) → abandon it
+      if (data.pending && !data.code && !data.online) {
+        await fetch('/pair-abandon', { method: 'POST', body: '{}' }).catch(() => {});
+      }
+    } catch(_) {}
+    showOnly('inputState');
+    checkBotStatus();
+    setInterval(checkBotStatus, 15000);
+  })();
+</script>
+</body>
+</html>

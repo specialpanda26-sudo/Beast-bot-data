@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Henry Ochibots v19™ — Command Console</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root{ --accent:#00e5ff; --accent2:#7c3aed; --bg:#020408; --card:#060e18; }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{
+      background:var(--bg); color:#e2eaf4; min-height:100vh;
+      font-family:'Space Grotesk','Segoe UI',system-ui,sans-serif;
+      display:flex; flex-direction:column; align-items:center; padding:24px 16px 60px;
+    }
+    .wrap{width:100%;max-width:420px}
+    .brand{text-align:center;margin:12px 0 24px;font-weight:700;letter-spacing:.5px}
+    .brand span{color:var(--accent)}
+    .card{
+      background:var(--card); border:1px solid rgba(255,255,255,.08); border-radius:16px;
+      padding:22px; margin-bottom:16px;
+    }
+    h2{font-size:16px;margin-bottom:4px}
+    p.sub{color:#8a96a8;font-size:13px;margin-bottom:16px}
+    label{display:block;font-size:12px;color:#9fb0c6;margin-bottom:6px}
+    input{
+      width:100%;padding:12px 14px;background:#0a1420;border:1px solid rgba(255,255,255,.12);
+      border-radius:10px;color:#fff;font-size:14px;outline:none;margin-bottom:14px;
+      transition:border .2s;
+    }
+    input:focus{border-color:var(--accent2)}
+    button{
+      width:100%;padding:12px;border:none;border-radius:10px;cursor:pointer;
+      background:linear-gradient(135deg,#7c3aed,var(--accent2));color:#fff;
+      font-size:14px;font-weight:700;transition:opacity .2s,transform .1s;
+    }
+    button:hover{opacity:.9}
+    button:active{transform:scale(.98)}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    button.secondary{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)}
+    .msg{font-size:13px;margin-top:10px;min-height:18px}
+    .msg.err{color:#ff6b6b}
+    .msg.ok{color:#4ade80}
+    .hidden{display:none}
+    .badge{
+      display:inline-block;font-size:11px;padding:3px 10px;border-radius:20px;
+      background:rgba(0,229,255,.1);color:var(--accent);margin-bottom:12px;
+    }
+    .note{font-size:12px;color:#6b7688;margin-top:6px;line-height:1.5}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">HENRY <span>OCHIBOTS</span> — Command Console</div>
+
+    <!-- LOGIN -->
+    <div class="card" id="loginCard">
+      <h2>Log in with your session</h2>
+      <p class="sub">Enter the session ID you paired with — we'll send a code to your linked WhatsApp number.</p>
+      <label>Session ID</label>
+      <input id="sessionId" placeholder="e.g. 254712345678 or your session name"/>
+      <button id="btnRequestOtp" onclick="requestOtp()">Send Code to WhatsApp</button>
+
+      <div id="otpBlock" class="hidden" style="margin-top:14px">
+        <label>Code (sent to <span id="sentTo"></span>)</label>
+        <input id="otpInput" inputmode="numeric" maxlength="6" placeholder="6-digit code"/>
+        <button id="btnVerifyOtp" onclick="verifyOtp()">Verify & Log In</button>
+      </div>
+      <div class="msg" id="loginMsg"></div>
+    </div>
+
+    <!-- CONSOLE (shown after login) -->
+    <div id="consoleArea" class="hidden">
+      <div class="card">
+        <span class="badge">● Logged in</span>
+        <h2>Send a Message</h2>
+        <label>To (phone number or group)</label>
+        <input id="sendTo" placeholder="254712345678"/>
+        <label>Message</label>
+        <input id="sendText" placeholder="Type your message"/>
+        <button onclick="doAction('send')">Send</button>
+        <div class="msg" id="sendMsg"></div>
+      </div>
+
+      <div class="card">
+        <h2>Update Status / About</h2>
+        <label>New status text</label>
+        <input id="statusText" placeholder="e.g. Available"/>
+        <button onclick="doAction('status')">Update Status</button>
+        <div class="msg" id="statusMsg"></div>
+      </div>
+
+      <div class="card">
+        <h2>Update Bio</h2>
+        <label>New bio text</label>
+        <input id="bioText" placeholder="e.g. Booking open — DM me"/>
+        <button onclick="doAction('bio')">Update Bio</button>
+        <div class="msg" id="bioMsg"></div>
+      </div>
+
+      <div class="card">
+        <h2>Update Profile Name</h2>
+        <label>New display name</label>
+        <input id="nameText" placeholder="e.g. Henry's Bot"/>
+        <button onclick="doAction('name')">Update Name</button>
+        <div class="msg" id="nameMsg"></div>
+        <div class="note">
+          Changing your registered phone number isn't available here — WhatsApp's real
+          number-migration is an official in-app flow, and doing it through an unofficial
+          library risks the account getting permanently banned.
+        </div>
+      </div>
+
+      <button class="secondary" onclick="logout()">Log out</button>
+    </div>
+  </div>
+
+<script>
+let SESSION_ID = "";
+let TOKEN = "";
+
+function setMsg(id, text, ok){
+  const el = document.getElementById(id);
+  el.textContent = text || "";
+  el.className = "msg " + (ok ? "ok" : (text ? "err" : ""));
+}
+
+async function requestOtp(){
+  SESSION_ID = document.getElementById("sessionId").value.trim();
+  if(!SESSION_ID){ setMsg("loginMsg", "Enter your session ID first."); return; }
+  const btn = document.getElementById("btnRequestOtp");
+  btn.disabled = true; btn.textContent = "Sending…";
+  try{
+    const r = await fetch("/api/console/request-otp", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({session: SESSION_ID})
+    });
+    const data = await r.json();
+    if(!data.success){ setMsg("loginMsg", data.error || "Couldn't send the code."); return; }
+    document.getElementById("sentTo").textContent = data.sent_to || "your number";
+    document.getElementById("otpBlock").classList.remove("hidden");
+    setMsg("loginMsg", "Code sent — check WhatsApp.", true);
+  }catch(e){ setMsg("loginMsg", "Network error — try again."); }
+  finally{ btn.disabled = false; btn.textContent = "Send Code to WhatsApp"; }
+}
+
+async function verifyOtp(){
+  const otp = document.getElementById("otpInput").value.trim();
+  if(!otp){ setMsg("loginMsg", "Enter the code."); return; }
+  const btn = document.getElementById("btnVerifyOtp");
+  btn.disabled = true; btn.textContent = "Verifying…";
+  try{
+    const r = await fetch("/api/console/verify-otp", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({session: SESSION_ID, otp})
+    });
+    const data = await r.json();
+    if(!data.success){ setMsg("loginMsg", data.error || "Incorrect code."); return; }
+    TOKEN = data.token;
+    document.getElementById("loginCard").classList.add("hidden");
+    document.getElementById("consoleArea").classList.remove("hidden");
+  }catch(e){ setMsg("loginMsg", "Network error — try again."); }
+  finally{ btn.disabled = false; btn.textContent = "Verify & Log In"; }
+}
+
+async function doAction(kind){
+  const endpoints = { send: "/api/console/send", status: "/api/console/status", bio: "/api/console/bio", name: "/api/console/name" };
+  const msgIds = { send: "sendMsg", status: "statusMsg", bio: "bioMsg", name: "nameMsg" };
+  let body = { session: SESSION_ID };
+  if(kind === "send"){
+    body.to = document.getElementById("sendTo").value.trim();
+    body.text = document.getElementById("sendText").value.trim();
+  } else if(kind === "status"){
+    body.text = document.getElementById("statusText").value;
+  } else if(kind === "bio"){
+    body.text = document.getElementById("bioText").value;
+  } else if(kind === "name"){
+    body.name = document.getElementById("nameText").value.trim();
+  }
+  try{
+    const r = await fetch(endpoints[kind], {
+      method: "POST",
+      headers: {"Content-Type":"application/json", "Authorization": "Bearer " + TOKEN},
+      body: JSON.stringify(body)
+    });
+    const data = await r.json();
+    setMsg(msgIds[kind], data.success ? "Done." : (data.error || "Something went wrong."), data.success);
+  }catch(e){ setMsg(msgIds[kind], "Network error — try again."); }
+}
+
+function logout(){
+  TOKEN = ""; SESSION_ID = "";
+  document.getElementById("consoleArea").classList.add("hidden");
+  document.getElementById("loginCard").classList.remove("hidden");
+  document.getElementById("otpBlock").classList.add("hidden");
+  document.getElementById("sessionId").value = "";
+  document.getElementById("otpInput").value = "";
+  setMsg("loginMsg", "");
+}
+</script>
+</body>
+</html>
